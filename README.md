@@ -61,4 +61,7 @@ should match version from [here](https://nvidia.github.io/nvidia-docker/#reposit
 (consult compatibility chart above) and follow instructions in link to install  
 * Some common errors are dependency failures or old version installs. I hope you have strong google skills if this is the case
 
+3. nvidia-docker runtime configuration:
 
+### 3. Building Docker images
+	

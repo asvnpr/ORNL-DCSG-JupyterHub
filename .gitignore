@@ -1,0 +1,10 @@
+jupyterhub_nb2kg/secrets/*
+jupyterhub_nb2kg/userlist
+global_data/*
+user_work/*
+hub_data/*
+db_data/*
+.env
+*.env
+jupyterhub_nb2kg/hub.env
+jupyterhub_nb2kg/kg.env

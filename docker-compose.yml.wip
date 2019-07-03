@@ -16,29 +16,26 @@ services:
                 image: postgres
                 container_name: ${HUB_DB_NAME}
                 restart: always
-                networks:
-                         - ${DOCKER_NETWORK_NAME}
                 # TODO: explore using docker volume for some env setup with dockersecrets
-                environment:
-                        # DB filename 
+                environment: 
                         POSTGRES_DB: ${HUB_DB_NAME}
-                        # volume mountpoint and dir for hub data
                         PGDATA: ${HUB_DB_DIR}
                         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
                 volumes:
-                        - type: volume
-                          source: ${HUB_DB_VOLUME}
-                          target: ${HUB_DB_DIR}
+                        - ${HUB_DB_VOLUME}=${HUB_DB_DIR}
 
         hub:
                 depends_on: 
                         # TODO: consider adding a health check
                         - hub-db
                 build:
-                        context: ./jupyterhub_nb2kg
-                        dockerfile: hub.Dockerfile
+                        context: ./jupyterhub
+                        dockerfile: jupyterhub.Dockerfile
                         args:
                                 JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
+                                HOST_SSL_KEY: ${HOST_SSL_KEY} 
+                                HOST_SSL_CERT: ${HOST_SSL_CERT}
+                                HOST_COOKIE_SECRET: ${HUB_COOKIE_SECRET}
                 restart: always
                 # TODO: specify version
                 # when build is also specified, image just builds as specified and tags it with the given image name
@@ -48,42 +45,30 @@ services:
                 container_name: ${HUB_NAME}
                 hostname: ${HUB_NAME}
                 volumes:
-                        # attach volumes to hub. not sure if I could just attach when spawning notebooks
-                        - type: volume
-                          source: ${USER_WORK_VOLUME}
-                          target: ${USER_WORK_DIR}
-                        - type: volume
-                          source: ${HUB_DATA_VOLUME}
-                          target: ${HUB_DATA_DIR}
+                        # attach notebooks volume to hub. not sure if I could just attach when spawning notebooks
+                        - ${USER_WORK_VOLUME}=${USER_WORK_DIR}
+                        - ${HUB_DATA_VOLUME}=${HUB_DATA_DIR}
                         # Binds host's Docker socket so Hub can spawn containers 
-                        - type: bind
-                          source: /var/run/docker.sock
-                          target: /var/run/docker.sock
-                        - type: volume
-                          source: ${GLOBAL_DATA_VOLUME}
-                          target: ${GLOBAL_DATA_DIR}
+                        - /var/run/docker.sock:/var/run/docker.sock:rw
+                        - ${GLOBAL_DATA_VOLUME}=${GLOBAL_DATA_DIR}
                 ports:
                         - "443:443"
-                        - "80:80"
                 networks: 
                         - ${DOCKER_NETWORK_NAME}
-                env_file: ./jupyterhub_nb2kg/hub.env
+                env_file: ./jupyterhub/hub.env
                 environment:
                         DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
                         HUB_CONTAINER_NAME: ${HUB_NAME}
                         USER_WORK_DIR: ${USER_WORK_DIR}
-                        GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
                         CONFIGPROXY_AUTH_TOKEN: ${PROXY_HUB_TOKEN}
-                        SSL_KEY: ${HUB_SSL_KEY} 
-                        SSL_CERT: ${HUB_SSL_CERT}
                         HUB_COOKIE_SECRET: ${HUB_COOKIE_SECRET}
                         POSTGRES_DB: ${HUB_DB_NAME}
                         POSTGRES_HOST: hub-db
                         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
                         KG_URL: ${KG_URL}
                         KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
-                        KG_ENV_WHITELIST: ${KG_ENV_WHITELIST}
-                        VALIDATE_KG_CERT: ${VALIDATE_KG_CERT}
+                        #KG_ENV_WHITELIST: ${KG_ENV_WHITELIST}
+                        #VALIDATE_KG_CERT: ${VALIDATE_KG_CERT}
                         #KG_CLIENT_KEY: ${KG_CLIENT_KEY} 
                         #KG_CLIENT_CERT: ${KG_CLIENT_CERT}
                         #KG_CLIENT_CA: ${KG_CLIENT_CA}                        
@@ -91,47 +76,44 @@ services:
                         NVIDIA_VISIBLE_DEVICES:     all
                         NVIDIA_DRIVER_CAPABILITIES: compute,utility
                 command: >
-                        jupyterhub --debug --log-level=0 -f /srv/jupyterhub/jupyterhub_config.py &>> /data/jupyterhub.log
-                        # PROD: jupyterhub --debug -f /srv/jupyterhub/jupyterhub_config.py
+                        jupyterhub -f /srv/jupyterhub/jupyterhub_config.py
         
         nb2kg:
-                build:
-                        context: ./jupyterhub_nb2kg
-                        dockerfile: nb.Dockerfile
-                        args:
-                                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
-                image: ${NB_IMAGE_NAME}
+                image: elyra/nb2kg:2.0.0.dev0
                 container_name: ${HUB_NB_NAME}
-                networks:
-                        - ${DOCKER_NETWORK_NAME}
                 ports:
-                        - "8888:8888"
+                        - "9888:8888"
                 environment:
                         KG_URL: ${KG_URL}
                         KG_HTTP_USER: ${KG_HTTP_USER}
                         KERNEL_USERNAME: ${KERNEL_USERNAME}
                         KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
                         VALIDATE_KG_CERT: "no"
+                command: >
+                        jupyter notebook
+                        --NotebookApp.ip=0.0.0.0
+                        --NotebookApp.session_manager_class=nb2kg.managers.SessionManager
+                        --NotebookApp.kernel_manager_class=nb2kg.managers.RemoteKernelManager
+                        --NotebookApp.kernel_spec_manager_class=nb2kg.managers.RemoteKernelSpecManager
 
-        kg:
+        kernel-gateway:
                 build:
-                        context: ./jupyterhub_nb2kg
+                        context: ./kernel_gateway
                         dockerfile: kg.Dockerfile
                 image: ${KG_IMAGE_NAME}
                 container_name: ${HUB_KG_NAME}
                 # unsure if specific host must be fixed to this
                 ports:
-                        - "9889:9889"
+                        - "9889:8888"
                 networks:
                         - ${DOCKER_NETWORK_NAME} 
-                env_file: ./jupyterhub_nb2kg/kg.env
+                env_file: ./kernel_gateway/kg.env
                 restart: on-failure
                 runtime: nvidia
                 environment:
                         # only allow connections from hub as identified in docker network
                         # could be opened later to allow connections not incoming from the Hub
                         KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
-                        KG_ALLOW_ORIGIN: '*'
                         ## needed for nvidia-docker version 2
                         NVIDIA_VISIBLE_DEVICES:     all
                         NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -156,28 +138,42 @@ services:
 networks:
         dcsg-hub-net: 
                 name: ${DOCKER_NETWORK_NAME}
-                # can change to overlay for docker swarm
-                driver: ${DOCKER_NETWORK_DRIVER}
+                driver: overlay
 
 # create all our volumes at appropriate mountpoints at build time
-# using this driver to config local mount point: https://github.com/MatchbookLab/local-persist
 volumes:
         # for JupHub db and cookie secrets
         hub-data:
-                external:
-                        name: ${HUB_DATA_VOLUME}
+                name: ${HUB_DATA_VOLUME}
+                driver: local
+                driver_opts:
+                        type: volume
+                        source: ${HUB_DATA_HOST_DIR}
+                        o: bind
         hub-db:
-                external:
-                        name: ${HUB_DB_VOLUME}
+                name: ${HUB_DB_VOLUME}
+                driver: local
+                driver_opts:
+                        type: volume
+                        source: ${HUB_DB_HOST_DIR}
+                        o: bind
         global-data:
-                external:
-                        name: ${GLOBAL_DATA_VOLUME}
+                name: ${GLOBAL_DATA_VOLUME}
+                driver: local
+                driver_opts:
+                        type: volume
+                        source: ${GLOBAL_DATA_HOST_DIR}
+                        o: bind
         #${USER_DATA_VOLUME}:
         #        driver: local
         #        driver_opts:
         #                type: volume
         #                source: ${USER_DATA_HOST_DIR}
         #                 o: bind
-        user-work:
-                external:
-                        name: ${USER_WORK_VOLUME}
+        user-work-data:
+                name: ${USER_WORK_VOLUME}
+                driver: local
+                driver_opts:
+                        type: volume
+                        source: ${USER_WORK_HOST_DIR}
+                        o: bind
