@@ -30,22 +30,22 @@ services:
                           source: ${HUB_DB_VOLUME}
                           target: ${HUB_DB_DIR}
 
-        hub:
+        hub-base:
                 depends_on: 
                         # TODO: consider adding a health check
                         - hub-db
                 build:
                         context: ./jupyterhub
-                        dockerfile: hub.Dockerfile
+                        dockerfile: hub.base.Dockerfile
                         args:
                                 JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
                 restart: always
                 # when build is also specified, image just builds as specified and tags it with the given image name
-                image: ${HUB_IMAGE_NAME}
+                image: ${HUB_IMAGE_NAME}-base
                 # nvidia runtime should only be needed for spawned notebooks
                 #runtime: nvidia
-                container_name: ${HUB_NAME}
-                hostname: ${HUB_NAME}
+                container_name: ${HUB_NAME}-base
+                hostname: ${HUB_NAME}-base
                 volumes:
                         # attach volumes to hub. not sure if I could just attach when spawning notebooks
                         - type: volume
@@ -66,7 +66,7 @@ services:
                         - "80:80"
                 networks: 
                         - ${DOCKER_NETWORK_NAME}
-                env_file: ./jupyterhub/hub.env
+                env_file: ./jupyterhub/hub.base.env
                 environment:
                         DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
                         HUB_CONTAINER_NAME: ${HUB_NAME}
@@ -80,7 +80,7 @@ services:
                         POSTGRES_HOST: hub-db
                         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
                         KG_URL: "http://dcsg-hub-kg:9889"
-                        #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
+                        KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
                         #EG_ENV_WHITELIST: ${KG_ENV_WHITELIST}
                         VALIDATE_KG_CERT: ${VALIDATE_KG_CERT}
                         #EG_CLIENT_KEY: ${KG_CLIENT_KEY} 
@@ -90,21 +90,22 @@ services:
                         jupyterhub --debug --log-level=0 -f /srv/jupyterhub/jupyterhub_config.py &>> /data/jupyterhub.log
                         # PROD: jupyterhub --debug -f /srv/jupyterhub/jupyterhub_config.py
         
-        nb2kg:
+        hub-nb:
                 build:
                         context: ./nb2kg
-                        dockerfile: nb.Dockerfile
+                        dockerfile: nb.base.Dockerfile
                         args:
                                 JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
-                                #MINICONDA_VERSION: ${MINICONDA_VERSION}
+                                MINICONDA_VERSION: ${MINICONDA_VERSION}
                                 NB2KG_VERSION: ${NB2KG_VERSION}
-                                #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
                                 KG_URL: http://${HUB_KG_NAME}:${KG_PORT}
                                 GATEWAY_HOST: ${HUB_KG_NAME}
-                                NB_PORT: ${NB_PORT}
-                image: ${NB_IMAGE_NAME}
-                container_name: ${HUB_NB_NAME}
+                image: ${NB_IMAGE_NAME}-base
+                container_name: ${HUB_NB_NAME}-base
                 environment:
+                    NB_PORT: "8888"
+                    GATEWAY_HOST: "dcsg-hub-kg"
+                    KG_URL: "http://dcsg-hub-kg:9889"
                     KG_HTTP_USER: ${KG_HTTP_USER}
                     KERNEL_USERNAME: ${KERNEL_USERNAME}
                     KG_AUTH_TOKEN: ${KG_AUTH_TOKEN} 
@@ -145,6 +146,8 @@ services:
                         KG_LOG_LEVEL: ${KG_LOG_LEVEL}
                         # only allow connections from hub as identified in docker network
                         # could be opened later to allow connections not incoming from the Hub
+                        KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
+                        EG_AUTHORIZED_USERS: ${KG_AUTH_USRS}
                         EG_ALLOW_ORIGIN: '*'
                         EG_PORT: ${KG_PORT}
                         ## needed for nvidia-docker version 2

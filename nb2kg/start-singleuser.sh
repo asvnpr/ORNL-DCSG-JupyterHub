@@ -4,6 +4,8 @@
 # based on: https://github.com/jupyter/docker-stacks/blob/master/base-notebook/start-singleuser.sh
 set -e
 
+source /home/jovyan/.bashrc
+
 # set default ip to 0.0.0.0
 if [[ "$NOTEBOOK_ARGS $@" != *"--ip="* ]]; then
   NOTEBOOK_ARGS="--ip=0.0.0.0 $NOTEBOOK_ARGS"
@@ -40,4 +42,6 @@ else
   NOTEBOOK_BIN="jupyterhub-singleuser"
 fi
 
-exec $NOTEBOOK_BIN $NOTEBOOK_ARGS "$@"
+echo "Starting singleuser notebook with following command: $NOTEBOOK_BIN $NOTEBOOK_ARGS $@"
+
+exec $NOTEBOOK_BIN --debug --no-browser --config=/etc/jupyter/jupyter_notebook_config.py $NOTEBOOK_ARGS "$@" 

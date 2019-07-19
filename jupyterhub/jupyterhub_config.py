@@ -43,7 +43,7 @@ c.JupyterHub.ssl_cert = os.environ.get('SSL_CERT')
 # using nativeauthenticator from: https://native-authenticator.readthedocs.io/en/latest/quickstart.html
 c.JupyterHub.authenticator_class = 'nativeauthenticator.NativeAuthenticator'
 # NOTE: only for testing. allows open signin with no confirmation
-#c.Authenticator.open_signup = True
+c.Authenticator.open_signup = True
 # catch and prevent common, weak passwords
 c.Authenticator.check_common_password = True
 c.Authenticator.minimum_password_length = 10
@@ -106,6 +106,8 @@ c.JupyterHub.db_url='postgresql://postgres:{password}@{host}/{db}'.format(
             
 # Spawn single-user servers as Docker containers
 c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
+# disable user notebook config so we can use nb2kg 
+c.Spawner.disable_user_config = True 
 # Remove containers once they are stopped
 c.DockerSpawner.remove_containers = True
 # For debugging arguments passed to spawned containers
@@ -117,8 +119,9 @@ c.DockerSpawner.image = os.environ.get('DOCKER_NOTEBOOK_IMAGE')
 # jupyter/docker-stacks *-notebook images as the Docker run command when
 # spawning containers.  Optionally, you can override the Docker run command
 # using the DOCKER_SPAWN_CMD environment variable.
-# NOTE: second argument is default CMD is env var dne
-spawn_cmd = os.environ.get('DOCKER_SPAWN_CMD', "start-nb2kg-singleuser.sh")
+# NOTE: second argument is default CMD if env var dne
+spawn_cmd = os.environ.get('DOCKER_SPAWN_CMD', "/usr/local/bin/start-nb2kg.sh")
+c.Spawner.cmd = spawn_cmd
 # NOTE: Add Nvidia and other relevant env vars if nec.
 c.DockerSpawner.extra_create_kwargs.update({'command': spawn_cmd})
 # Connect containers to this Docker network

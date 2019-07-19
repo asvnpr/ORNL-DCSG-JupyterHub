@@ -26,12 +26,10 @@ RUN /opt/conda/bin/pip install psycopg2-binary && \
 # Copy TLS certificate and key
 # TODO: remove hardcoded paths. maybe implement dockervolume for secrets
 COPY ./secrets/ssl/ /srv/jupyterhub/secrets/
-COPY ./start-nb2kg-singleuser.sh /usr/local/bin/
 #COPY ./dockerspawner.py /opt/conda/lib/python3.6/site-packages/dockerspawner/dockerspawner.py
 
 RUN chmod 700 /srv/jupyterhub/secrets && \
-    chmod 600 /srv/jupyterhub/secrets/* && \
-    chmod +x /usr/local/bin/start-nb2kg-singleuser.sh
+    chmod 600 /srv/jupyterhub/secrets/*
 
 COPY ./userlist /srv/jupyterhub/userlist 
 COPY ./jupyterhub_config.py /srv/jupyterhub
