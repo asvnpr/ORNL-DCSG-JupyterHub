@@ -74,12 +74,20 @@ c.JupyterHub.admin_access = False
 c.Authenticator.whitelist = whitelist = set()
 c.Authenticator.admin_users = admins = set()
 pwd = os.path.dirname(__file__)
-# user dirs
-user_env_vars = ['WORK', 'ENV', 'KERNELS']
+# volumes where each user has a dir
+user_env_vars = ['WORK', 'ENV']
 user_vol_dirs = dict()
+volumes = dict()
 for var in user_env_vars: user_vol_dirs[var] = os.environ.get("USER_{var}_DIR".format(var=var))
 with open(os.path.join(pwd, 'userlist')) as f:
+    
+    # spawn docker client to create volumes below
+    import docker
+    client = docker.DockerClient(base_url='unix://var/run/docker.sock')
+    volume_driver = os.environ.get('HUB_VOL_DRIVER')
+
     for line in f:
+        # ignore newlines
         if not line:
             continue
         user_role = line.split()
@@ -90,20 +98,29 @@ with open(os.path.join(pwd, 'userlist')) as f:
         
         # template name for user dirs
         hub_user_dir = "jupyterhub-user-{user}".format(user=user)
-        # create dirs for users in userlists in volumes 
-        # that handle user data
+
+        # create dirs for users in userlists 
+        # and use them as mountpoints for docker volumes
         for var in user_env_vars:
             # volume mountpoint in hub container 
             user_vol_dir = user_vol_dirs[var] 
-            # TODO: this is ugly. fix later
-            if var != 'KERNELS':        
-                hub_user_dir = os.path.join(user_vol_dir, hub_user_dir)
-                
-                if var == 'WORK':
-                    hub_user_data_dir = os.path.join(hub_user_dir, 'my_data')
-                    os.makedirs(hub_user_data_dir, exist_ok=True)
-                    continue
-                os.makedirs(hub_user_dir, exist_ok=True)
+            user_dir = os.path.join(user_vol_dir, hub_user_dir) 
+            if var == 'WORK':
+                hub_user_data_dir = os.path.join(user_dir, 'my_data')
+                os.makedirs(hub_user_data_dir, exist_ok=True)
+            else:
+                os.makedirs(user_dir, exist_ok=True)
+        
+            # save data to create volumes for user dirs down below
+            # necessary to use this driver so data created in container
+            # appears in host (physical server)
+            vol_name = "{dir}-{var}".format(dir=hub_user_dir, var=var.lower())
+            volumes[vol_name] = user_dir
+            client.volumes.create(
+                name=vol_name,
+                driver=volume_driver,
+                driveropts={'mountpoint': volumes[vol_name]}
+            )
 
 # Database connection setup
 
@@ -118,27 +135,6 @@ c.JupyterHub.db_url='postgresql://postgres:{password}@{host}/{db}'.format(
 
 # config docs only available through source: 
 # https://github.com/jupyterhub/dockerspawner/blob/master/dockerspawner/dockerspawner.py
-
-# modify dockerspawner so we can make sure any user changes propagate back to the mount source
-#from dockerspawner import DockerSpawner
-#from docker.types import Mount
-#class modDockerSpawner(DockerSpawner):
-#    def start(self):
-#        vols = self.volumes
-#        # add mounts for the docker sdk's config for container creation
-#        # these are more configurable than volumes and we'll use them to 
-#        # modify the bind propagation of the created container binds
-#        mount_spec = []
-#        for src in vols.keys():
-#            print(src)
-#            dst = vols[src]['bind']
-#            src = src_dirs[i]
-#            dst = dst_dirs[i] 
-#            ro = ('global' in src)
-#            mnt = Mount(target=dst, source=src, type='bind', read_only=ro, propagation='rshared')
-#            mount_spec.append(mnt)
-#        self.extra_host_config.update({'mounts': mount_spec})
-#        return super().start()
 
 # Spawn single-user servers as Docker containers
 c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
@@ -191,26 +187,30 @@ dir_template = 'jupyterhub-user-{username}'
 # (used to run python env w. user installed pkgs and libs)
 # 4. hub host bind for user data (datasets, images, etc.)
 # 5. hub host bind source for global data
-nb_dir, envs_dir, kernels_dir = list(map(lambda k: user_vol_dirs[k], user_env_vars))
-nb_dir = os.path.join(nb_dir, dir_template)
-envs_dir = os.path.join(envs_dir, dir_template)
-user_data_dir = os.path.join(nb_dir, 'my_data')
+nb_dir = dir_template + '-work'
+envs_dir = dir_template + '-envs'
+kernels_dir = os.environ.get('USER_KERNELS_DIR')
 global_data_dir = os.environ.get('GLOBAL_DATA_DIR')
+
+# create volumes for kernels
+
+client.volumes.create(
+    name='nb_kernels',
+    driver=volume_driver,
+    driveropts={'mountpoint': kernels_dir}
+)
 
 # nb container bind targets
 docker_nb_dir = notebook_dir
-# TODO: replace val w. env var 
+# TODO: replace this hardcoded value w. env var 
 docker_envs_dir = '/opt/conda/envs'
 docker_kernels_dir = kernels_dir
-docker_user_data_dir = os.path.join(notebook_dir, 'my_data')
 docker_global_data_dir = os.path.join(notebook_dir, 'global_data')
-
 
 c.DockerSpawner.volumes = {
     nb_dir : {"bind": docker_nb_dir, "mode":"rw"},
     envs_dir: {"bind": docker_envs_dir, "mode": "rw"},
     kernels_dir: {"bind": docker_kernels_dir, "mode": "rw"},
-    user_data_dir: {"bind": docker_user_data_dir, "mode":"rw"},
     global_data_dir: {"bind": docker_global_data_dir, "mode": "ro"}
 }
 

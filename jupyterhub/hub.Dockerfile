@@ -34,6 +34,6 @@ RUN chmod 700 /srv/jupyterhub/secrets && \
 COPY ./userlist /srv/jupyterhub/userlist 
 COPY ./jupyterhub_config.py /srv/jupyterhub
 COPY ./init_hub.sh /usr/local/bin/init_hub.sh
-COPY ./dockerspawner.py /opt/conda/lib/python3.6/site-packages/dockerspawner/dockerspawner.py
+#COPY ./dockerspawner.py /opt/conda/lib/python3.6/site-packages/dockerspawner/dockerspawner.py
 
 CMD init_hub.sh  

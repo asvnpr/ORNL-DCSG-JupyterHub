@@ -6,7 +6,6 @@
 # , here: https://github.com/IzODA/jupyterhub/blob/master/docker-compose.yml
 # , and here: https://github.com/jupyter/nb2kg/blob/master/docker-compose.yml
 
-# latest docker-compose version compatible with nvidia-docker 
 version: '3.7'
 
 # NOTE: container_name must be removed if we want to scale
@@ -53,24 +52,17 @@ services:
             - type: bind
               source: /var/run/docker.sock
               target: /var/run/docker.sock
-            # attach volumes to hub. not sure if I could just attach when spawning notebooks
-            - type: bind
-              source: ${USER_WORK_HOST_DIR}
+            - type: volume
+              source: ${USER_WORK_VOLUME}
               target: ${USER_WORK_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${USER_ENV_HOST_DIR}
+            - type: volume
+              source: ${USER_ENV_VOLUME}
               target: ${USER_ENV_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind 
-              source: ${USER_KERNELS_HOST_DIR}
+            - type: volume
+              source: ${USER_KERNELS_VOLUME}
               target: ${USER_KERNELS_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${GLOBAL_DATA_HOST_DIR}
+            - type: volume
+              source: ${GLOBAL_DATA_VOLUME}
               target: ${GLOBAL_DATA_DIR}
         ports:
             - "443:443"
@@ -80,6 +72,7 @@ services:
         env_file: ./jupyterhub/hub.env
         environment:
             DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
+            HUB_VOL_DRIVER: ${HUB_VOL_DRIVER}
             HUB_CONTAINER_NAME: ${HUB_NAME}-nb
             DOCKER_NOTEBOOK_IMAGE: ${NB_IMAGE_NAME}
             DOCKER_SPAWN_CMD: ${HUB_BASE_CMD}
@@ -112,24 +105,17 @@ services:
             - type: bind
               source: /var/run/docker.sock
               target: /var/run/docker.sock
-            # attach volumes to hub. not sure if I could just attach when spawning notebooks
-            - type: bind
-              source: ${USER_WORK_HOST_DIR}
+            - type: volume
+              source: ${USER_WORK_VOLUME}
               target: ${USER_WORK_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${USER_ENV_HOST_DIR}
+            - type: volume
+              source: ${USER_ENV_VOLUME}
               target: ${USER_ENV_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind 
-              source: ${USER_KERNELS_HOST_DIR}
+            - type: volume
+              source: ${USER_KERNELS_VOLUME}
               target: ${USER_KERNELS_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${GLOBAL_DATA_HOST_DIR}
+            - type: volume
+              source: ${GLOBAL_DATA_VOLUME}
               target: ${GLOBAL_DATA_DIR}
         ports:
             - "443:443"
@@ -139,6 +125,7 @@ services:
         env_file: ./jupyterhub/hub.env
         environment:
             DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
+            HUB_VOL_DRIVER: ${HUB_VOL_DRIVER}
             DOCKER_NOTEBOOK_IMAGE: ${NB_IMAGE_NAME}-nb2kg
             HUB_CONTAINER_NAME: ${HUB_NAME}-nb2kg
             DOCKER_SPAWN_CMD: ${HUB_NB2KG_CMD}
@@ -243,26 +230,20 @@ services:
             - type: bind
               source: /var/run/docker.sock
               target: /var/run/docker.sock
-            # attach volumes to hub. not sure if I could just attach when spawning notebooks
-            - type: bind
-              source: ${USER_WORK_HOST_DIR}
+            - type: volume
+              source: ${USER_WORK_VOLUME}
               target: ${USER_WORK_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${USER_ENV_HOST_DIR}
+            - type: volume
+              source: ${USER_ENV_VOLUME}
               target: ${USER_ENV_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind 
-              source: ${USER_KERNELS_HOST_DIR}
+            - type: volume
+              source: ${USER_KERNELS_VOLUME}
               target: ${USER_KERNELS_DIR}
-              bind:
-                  propagation: rshared
-            - type: bind
-              source: ${GLOBAL_DATA_HOST_DIR}
+            - type: volume
+              source: ${GLOBAL_DATA_VOLUME}
               target: ${GLOBAL_DATA_DIR}
         environment:
+            HUB_VOL_DRIVER: ${HUB_VOL_DRIVER}
             USER_WORK_DIR: ${USER_WORK_DIR}
             USER_ENV_DIR: ${USER_ENV_DIR}
             GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
@@ -278,11 +259,7 @@ services:
             ## needed for nvidia-docker version 2
             NVIDIA_VISIBLE_DEVICES:     all
             NVIDIA_DRIVER_CAPABILITIES: compute,utility
-            #deploy:
-            #    replicas: 1
-            #    endpoint_mode: dnsrr
         
-# create our overlay network at build time so we can enable swarm functionality if needed                            
 networks:
     dcsg-hub-net: 
         name: ${DOCKER_NETWORK_NAME}
