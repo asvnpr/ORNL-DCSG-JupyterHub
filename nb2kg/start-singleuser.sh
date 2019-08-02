@@ -42,6 +42,12 @@ else
   NOTEBOOK_BIN="jupyterhub-singleuser"
 fi
 
+# create a conda env for the user if it doesn't exist
+if [ ! -d "/opt/conda/envs/${JUPYTERHUB_USER}" ] 
+then
+    conda create -n ${JUPYTERHUB_USER}
+fi
+
 echo "Starting singleuser notebook with following command: $NOTEBOOK_BIN $NOTEBOOK_ARGS $@"
 
 exec $NOTEBOOK_BIN --debug --no-browser --config=/etc/jupyter/jupyter_notebook_config.py $NOTEBOOK_ARGS "$@" 

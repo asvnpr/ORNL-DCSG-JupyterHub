@@ -3,7 +3,7 @@
 # based on: https://github.com/whlteXbread/GPU-Jupyterhub/blob/master/Jupyterhub_image/Dockerfile.jupyterhub
 #, and: https://github.com/IzODA/jupyterhub/blob/master/Dockerfile.jupyterhub
 
-ARG JUPYTERHUB_VERSION=0.9.6
+ARG JUPYTERHUB_VERSION=1.0.0
 ARG HOST_SSL_KEY
 ARG HOST_SSL_CERT
 # jupyterhub-onbuild automaticalls adds jupyter_config.py
@@ -33,3 +33,7 @@ RUN chmod 700 /srv/jupyterhub/secrets && \
 
 COPY ./userlist /srv/jupyterhub/userlist 
 COPY ./jupyterhub_config.py /srv/jupyterhub
+COPY ./init_hub.sh /usr/local/bin/init_hub.sh
+COPY ./dockerspawner.py /opt/conda/lib/python3.6/site-packages/dockerspawner/dockerspawner.py
+
+CMD init_hub.sh  

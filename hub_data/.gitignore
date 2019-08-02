@@ -1,6 +1,0 @@
-# hacky hack so empty dir is uploaded
-# to give clear idea of repo structure
-# Ignore everything in this directory
-*
-# Except this file
-!.gitignore

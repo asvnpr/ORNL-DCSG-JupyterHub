@@ -7,179 +7,309 @@
 # , and here: https://github.com/jupyter/nb2kg/blob/master/docker-compose.yml
 
 # latest docker-compose version compatible with nvidia-docker 
-version: '2.3'
+version: '3.7'
 
 # NOTE: container_name must be removed if we want to scale
 services:
-        hub-db:
-                # TODO: specify version
-                image: postgres
-                container_name: ${HUB_DB_NAME}
-                restart: always
-                networks:
-                         - ${DOCKER_NETWORK_NAME}
-                # TODO: explore using docker volume for some env setup with dockersecrets
-                environment:
-                        # DB filename 
-                        POSTGRES_DB: ${HUB_DB_NAME}
-                        # volume mountpoint and dir for hub data
-                        PGDATA: ${HUB_DB_DIR}
-                        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-                volumes:
-                        - type: volume
-                          source: ${HUB_DB_VOLUME}
-                          target: ${HUB_DB_DIR}
+    hub-db:
+        # TODO: specify version
+        image: postgres
+        container_name: ${HUB_DB_NAME}
+        restart: always
+        networks:
+             - ${DOCKER_NETWORK_NAME}
+        # TODO: explore using docker volume for some env setup with dockersecrets
+        environment:
+            # DB filename 
+            POSTGRES_DB: ${HUB_DB_NAME}
+            # volume mountpoint and dir for hub data
+            #PGDATA: ${HUB_DB_DIR}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        volumes:
+            - type: bind
+              source: ${HUB_DB_HOST_DIR}
+              target: ${HUB_DB_DIR}
+              #bind:
+              #    propagation: rshared
 
-        hub:
-                depends_on: 
-                        # TODO: consider adding a health check
-                        - hub-db
-                build:
-                        context: ./jupyterhub
-                        dockerfile: hub.Dockerfile
-                        args:
-                                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
-                restart: always
-                # when build is also specified, image just builds as specified and tags it with the given image name
-                image: ${HUB_IMAGE_NAME}
-                # nvidia runtime should only be needed for spawned notebooks
-                #runtime: nvidia
-                container_name: ${HUB_NAME}
-                hostname: ${HUB_NAME}
-                volumes:
-                        # attach volumes to hub. not sure if I could just attach when spawning notebooks
-                        - type: volume
-                          source: ${USER_WORK_VOLUME}
-                          target: ${USER_WORK_DIR}
-                        - type: volume
-                          source: ${HUB_DATA_VOLUME}
-                          target: ${HUB_DATA_DIR}
-                        # Binds host's Docker socket so Hub can spawn containers 
-                        - type: bind
-                          source: /var/run/docker.sock
-                          target: /var/run/docker.sock
-                        - type: volume
-                          source: ${GLOBAL_DATA_VOLUME}
-                          target: ${GLOBAL_DATA_DIR}
-                ports:
-                        - "443:443"
-                        - "80:80"
-                networks: 
-                        - ${DOCKER_NETWORK_NAME}
-                env_file: ./jupyterhub/hub.env
-                environment:
-                        DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
-                        HUB_CONTAINER_NAME: ${HUB_NAME}
-                        USER_WORK_DIR: ${USER_WORK_DIR}
-                        GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
-                        CONFIGPROXY_AUTH_TOKEN: ${PROXY_HUB_TOKEN}
-                        SSL_KEY: ${HUB_SSL_KEY} 
-                        SSL_CERT: ${HUB_SSL_CERT}
-                        HUB_COOKIE_SECRET: ${HUB_COOKIE_SECRET}
-                        POSTGRES_DB: ${HUB_DB_NAME}
-                        POSTGRES_HOST: hub-db
-                        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-                        KG_URL: "http://dcsg-hub-kg:9889"
-                        #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
-                        #EG_ENV_WHITELIST: ${KG_ENV_WHITELIST}
-                        VALIDATE_KG_CERT: ${VALIDATE_KG_CERT}
-                        #EG_CLIENT_KEY: ${KG_CLIENT_KEY} 
-                        #EG_CLIENT_CERT: ${KG_CLIENT_CERT}
-                        #EG_CLIENT_CA: ${KG_CLIENT_CA}                        
-                command: >
-                        jupyterhub --debug --log-level=0 -f /srv/jupyterhub/jupyterhub_config.py &>> /data/jupyterhub.log
-                        # PROD: jupyterhub --debug -f /srv/jupyterhub/jupyterhub_config.py
+    hub:
+        depends_on: 
+            # TODO: consider adding a health check
+            - hub-db
+        build:
+            context: ./jupyterhub
+            dockerfile: hub.Dockerfile
+            args:
+                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
+        restart: always
+        # when build is also specified, image just builds as specified and tags it with the given image name
+        image: ${HUB_IMAGE_NAME}
+        # nvidia runtime should only be needed for spawned notebooks
+        #runtime: nvidia
+        container_name: ${HUB_NAME}
+        hostname: ${HUB_NAME}
+        volumes:
+            # Binds host's Docker socket so Hub can spawn containers 
+            - type: bind
+              source: /var/run/docker.sock
+              target: /var/run/docker.sock
+            # attach volumes to hub. not sure if I could just attach when spawning notebooks
+            - type: bind
+              source: ${USER_WORK_HOST_DIR}
+              target: ${USER_WORK_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${USER_ENV_HOST_DIR}
+              target: ${USER_ENV_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind 
+              source: ${USER_KERNELS_HOST_DIR}
+              target: ${USER_KERNELS_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${GLOBAL_DATA_HOST_DIR}
+              target: ${GLOBAL_DATA_DIR}
+        ports:
+            - "443:443"
+            - "80:80"
+        networks: 
+            - ${DOCKER_NETWORK_NAME}
+        env_file: ./jupyterhub/hub.env
+        environment:
+            DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
+            HUB_CONTAINER_NAME: ${HUB_NAME}-nb
+            DOCKER_NOTEBOOK_IMAGE: ${NB_IMAGE_NAME}
+            DOCKER_SPAWN_CMD: ${HUB_BASE_CMD}
+            USER_WORK_DIR: ${USER_WORK_DIR}
+            USER_ENV_DIR: ${USER_ENV_DIR}
+            USER_KERNELS_DIR: ${USER_KERNELS_DIR}
+            GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
+            CONFIGPROXY_AUTH_TOKEN: ${PROXY_HUB_TOKEN}
+            SSL_KEY: ${HUB_SSL_KEY} 
+            SSL_CERT: ${HUB_SSL_CERT}
+            HUB_COOKIE_SECRET: ${HUB_COOKIE_SECRET}
+            SPAWN_RUNTIME: nvidia
+            POSTGRES_DB: ${HUB_DB_NAME}
+            POSTGRES_HOST: hub-db
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    hub-nb2kg:
+        build:
+            context: ./jupyterhub
+            dockerfile: hub.Dockerfile
+            args:
+                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
+        restart: always
+        image: ${HUB_IMAGE_NAME}
+        # nvidia runtime should only be needed for spawned notebooks
+        container_name: ${HUB_NAME}-nb2kg
+        hostname: ${HUB_NAME}-nb2kg
+        volumes:
+            # Binds host's Docker socket so Hub can spawn containers 
+            - type: bind
+              source: /var/run/docker.sock
+              target: /var/run/docker.sock
+            # attach volumes to hub. not sure if I could just attach when spawning notebooks
+            - type: bind
+              source: ${USER_WORK_HOST_DIR}
+              target: ${USER_WORK_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${USER_ENV_HOST_DIR}
+              target: ${USER_ENV_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind 
+              source: ${USER_KERNELS_HOST_DIR}
+              target: ${USER_KERNELS_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${GLOBAL_DATA_HOST_DIR}
+              target: ${GLOBAL_DATA_DIR}
+        ports:
+            - "443:443"
+            - "80:80"
+        networks: 
+            - ${DOCKER_NETWORK_NAME}
+        env_file: ./jupyterhub/hub.env
+        environment:
+            DOCKER_NETWORK_NAME: ${DOCKER_NETWORK_NAME}
+            DOCKER_NOTEBOOK_IMAGE: ${NB_IMAGE_NAME}-nb2kg
+            HUB_CONTAINER_NAME: ${HUB_NAME}-nb2kg
+            DOCKER_SPAWN_CMD: ${HUB_NB2KG_CMD}
+            USER_WORK_DIR: ${USER_WORK_DIR}
+            USER_ENV_DIR: ${USER_ENV_DIR}
+            USER_KERNELS_DIR: ${USER_KERNELS_DIR}
+            GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
+            CONFIGPROXY_AUTH_TOKEN: ${PROXY_HUB_TOKEN}
+            SSL_KEY: ${HUB_SSL_KEY} 
+            SSL_CERT: ${HUB_SSL_CERT}
+            HUB_COOKIE_SECRET: ${HUB_COOKIE_SECRET}
+            SPAWN_RUNTIME: runc
+            POSTGRES_DB: ${HUB_DB_NAME}
+            POSTGRES_HOST: hub-db
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            KG_URL: "http://dcsg-hub-kg:9889"
+            VALIDATE_KG_CERT: ${VALIDATE_KG_CERT}
+            #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
+            #EG_ENV_WHITELIST: ${KG_ENV_WHITELIST}
+            #EG_CLIENT_KEY: ${KG_CLIENT_KEY} 
+            #EG_CLIENT_CERT: ${KG_CLIENT_CERT}
+            #EG_CLIENT_CA: ${KG_CLIENT_CA}                        
+
+    hub-nb:
+        build:
+            context: ./nb2kg
+            dockerfile: nb.base.Dockerfile
+            args:
+                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
+                MINICONDA_VERSION: ${MINICONDA_VERSION}
+        image: ${NB_IMAGE_NAME}
+        container_name: ${HUB_NB_NAME}
+        environment:
+            NB_PORT: ${NB_PORT}
+        networks:
+                - ${DOCKER_NETWORK_NAME}
+        ports:
+                - ${NB_PORT}:${NB_PORT}
+    
+    nb2kg:
+        build:
+            context: ./nb2kg
+            dockerfile: nb.Dockerfile
+            args:
+                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
+                #MINICONDA_VERSION: ${MINICONDA_VERSION}
+                NB2KG_VERSION: ${NB2KG_VERSION}
+                #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
+                KG_URL: http://${HUB_KG_NAME}:${KG_PORT}
+                GATEWAY_HOST: ${HUB_KG_NAME}
+                NB_PORT: ${NB_PORT}
+                BASE_NB_IMG: ${NB_IMAGE_NAME}
+        image: ${NB_IMAGE_NAME}-nb2kg
+        container_name: ${HUB_NB_NAME}-nb2kg
+        environment:
+            KG_HTTP_USER: ${KG_HTTP_USER}
+            KERNEL_USERNAME: ${KERNEL_USERNAME}
+            KG_AUTH_TOKEN: ${KG_AUTH_TOKEN} 
+            VALIDATE_EG_CERT: "no"
+        networks:
+            - ${DOCKER_NETWORK_NAME}
+        ports:
+            - ${NB_PORT}:${NB_PORT}
+
+    gpu-python-kernel:
+        build: 
+            context: ./kernel_gateway/
+            dockerfile: kernel-gpu-py.Dockerfile
+            args:
+                MINICONDA_VERSION: ${MINICONDA_VERSION}
+        image: hub-kernel
+
         
-        nb2kg:
-                build:
-                        context: ./nb2kg
-                        dockerfile: nb.Dockerfile
-                        args:
-                                JUPYTERHUB_VERSION: ${JUPYTERHUB_VERSION}
-                                #MINICONDA_VERSION: ${MINICONDA_VERSION}
-                                NB2KG_VERSION: ${NB2KG_VERSION}
-                                #KG_AUTH_TOKEN: ${KG_AUTH_TOKEN}
-                                KG_URL: http://${HUB_KG_NAME}:${KG_PORT}
-                                GATEWAY_HOST: ${HUB_KG_NAME}
-                                NB_PORT: ${NB_PORT}
-                image: ${NB_IMAGE_NAME}
-                container_name: ${HUB_NB_NAME}
-                environment:
-                    KG_HTTP_USER: ${KG_HTTP_USER}
-                    KERNEL_USERNAME: ${KERNEL_USERNAME}
-                    KG_AUTH_TOKEN: ${KG_AUTH_TOKEN} 
-                    VALIDATE_EG_CERT: "no"
-                networks:
-                        - ${DOCKER_NETWORK_NAME}
-                ports:
-                        - ${NB_PORT}:${NB_PORT}
 
-        # some basis in enterprise-gateway demo: 
-        # https://github.com/jupyter/enterprise_gateway/blob/master/etc/docker/docker-compose.yml
-        kernel-gateway:
-                build:
-                        context: ./kernel_gateway
-                        dockerfile: kg.Dockerfile
-                        args:
-                            LOG_LEVEL: ${KG_LOG_LEVEL}
-                            CONFIG_DIR: ${KG_CONFIG}
-                            KG_ALLOW_ORIGIN: ${KG_ALLOW_ORIGIN}
-                image: ${KG_IMAGE_NAME}
-                user: root
-                container_name: ${HUB_KG_NAME}
-                # unsure if specific host must be fixed to this
-                ports:
-                    - ${KG_PORT}:8888
-                networks:
-                        - ${DOCKER_NETWORK_NAME} 
-                env_file: ./kernel_gateway/kg.env
-                restart: on-failure
-                runtime: nvidia
-                volumes:
-                    - "/var/run/docker.sock:/var/run/docker.sock"
-                environment:
-                        EG_DOCKER_NETWORK: ${DOCKER_NETWORK_NAME}
-                        GATEWAY_HOST: ${HUB_KG_NAME}
-                        KG_PORT: ${KG_PORT}
-                        EG_URL: http://${HUB_KG_NAME}:${KG_PORT}
-                        KG_LOG_LEVEL: ${KG_LOG_LEVEL}
-                        # only allow connections from hub as identified in docker network
-                        # could be opened later to allow connections not incoming from the Hub
-                        EG_ALLOW_ORIGIN: '*'
-                        EG_PORT: ${KG_PORT}
-                        ## needed for nvidia-docker version 2
-                        NVIDIA_VISIBLE_DEVICES:     all
-                        NVIDIA_DRIVER_CAPABILITIES: compute,utility
-                #deploy:
-                #    replicas: 1
-                #    endpoint_mode: dnsrr
+    # some basis in enterprise-gateway demo: 
+    # https://github.com/jupyter/enterprise_gateway/blob/master/etc/docker/docker-compose.yml
+    kernel-gateway:
+        depends_on:
+            - gpu-python-kernel
+        build:
+            context: ./kernel_gateway
+            dockerfile: kg.Dockerfile
+            args:
+                LOG_LEVEL: ${KG_LOG_LEVEL}
+                CONFIG_DIR: ${KG_CONFIG}
+                KG_ALLOW_ORIGIN: ${KG_ALLOW_ORIGIN}
+                EG_VERSION: ${EG_VERSION}
+                USER_KERNELS_DIR: ${USER_KERNELS_DIR}
+        image: ${KG_IMAGE_NAME}
+        user: root
+        container_name: ${HUB_KG_NAME}
+        # unsure if specific host must be fixed to this
+        ports:
+            - ${KG_PORT}:8888
+        networks:
+            - ${DOCKER_NETWORK_NAME} 
+        env_file: ./kernel_gateway/kg.env
+        restart: on-failure
+        # runtime: nvidia
+        volumes:
+            # Binds host's Docker socket so Hub can spawn containers 
+            - type: bind
+              source: /var/run/docker.sock
+              target: /var/run/docker.sock
+            # attach volumes to hub. not sure if I could just attach when spawning notebooks
+            - type: bind
+              source: ${USER_WORK_HOST_DIR}
+              target: ${USER_WORK_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${USER_ENV_HOST_DIR}
+              target: ${USER_ENV_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind 
+              source: ${USER_KERNELS_HOST_DIR}
+              target: ${USER_KERNELS_DIR}
+              bind:
+                  propagation: rshared
+            - type: bind
+              source: ${GLOBAL_DATA_HOST_DIR}
+              target: ${GLOBAL_DATA_DIR}
+        environment:
+            USER_WORK_DIR: ${USER_WORK_DIR}
+            USER_ENV_DIR: ${USER_ENV_DIR}
+            GLOBAL_DATA_DIR: ${GLOBAL_DATA_DIR}
+            EG_DOCKER_NETWORK: ${DOCKER_NETWORK_NAME}
+            GATEWAY_HOST: ${HUB_KG_NAME}
+            KG_PORT: ${KG_PORT}
+            EG_URL: http://${HUB_KG_NAME}:${KG_PORT}
+            KG_LOG_LEVEL: ${KG_LOG_LEVEL}
+            # only allow connections from hub as identified in docker network
+            # could be opened later to allow connections not incoming from the Hub
+            EG_ALLOW_ORIGIN: '*'
+            EG_PORT: ${KG_PORT}
+            ## needed for nvidia-docker version 2
+            NVIDIA_VISIBLE_DEVICES:     all
+            NVIDIA_DRIVER_CAPABILITIES: compute,utility
+            #deploy:
+            #    replicas: 1
+            #    endpoint_mode: dnsrr
         
 # create our overlay network at build time so we can enable swarm functionality if needed                            
 networks:
-        dcsg-hub-net: 
-                name: ${DOCKER_NETWORK_NAME}
-                # can change to overlay for docker swarm
-                driver: ${DOCKER_NETWORK_DRIVER}
+    dcsg-hub-net: 
+        name: ${DOCKER_NETWORK_NAME}
+        # can change to overlay for docker swarm
+        driver: ${DOCKER_NETWORK_DRIVER}
 
 # create all our volumes at appropriate mountpoints at build time
 # using this driver to config local mount point: https://github.com/MatchbookLab/local-persist
 volumes:
-        # for JupHub db and cookie secrets
-        hub-data:
-                external:
-                        name: ${HUB_DATA_VOLUME}
-        hub-db:
-                external:
-                        name: ${HUB_DB_VOLUME}
-        global-data:
-                external:
-                        name: ${GLOBAL_DATA_VOLUME}
-        #${USER_DATA_VOLUME}:
-        #        driver: local
-        #        driver_opts:
-        #                type: volume
-        #                source: ${USER_DATA_HOST_DIR}
-        #                 o: bind
-        user-work:
-                external:
-                        name: ${USER_WORK_VOLUME}
+    hub-db:
+        driver: ${HUB_VOL_DRIVER}
+    global-data:
+        driver: ${HUB_VOL_DRIVER}
+        driver_opts:
+            mountpoint: ${GLOBAL_DATA_HOST_DIR}
+
+    user-conda-envs:
+        driver: ${HUB_VOL_DRIVER}
+        driver_opts:
+            mountpoint: ${USER_ENV_HOST_DIR}
+
+    user-jup-kernels:
+        driver: ${HUB_VOL_DRIVER}
+        driver_opts:
+            mountpoint: ${USER_KERNELS_HOST_DIR}
+
+    user-work:
+        driver: ${HUB_VOL_DRIVER}
+        driver_opts:
+            mountpoint: ${USER_WORK_HOST_DIR}

@@ -1,15 +1,18 @@
 #! /usr/bin/env bash
 
+# NOTE: old, incomplete approach
+
+# script to create a container, create and attach volumes, 
+# and copy over host dirs to populate the volumes
+
 # WARNING!: only run this during initial build and environment setup 
 # or when you add new data directly on the host
 
+# export all vars in .env. excessive, but bash has no easy way to parse the file
+export $(grep -v '^#' .env | xargs -d '\n')
+
 # this assumes this script and all data dirs are located at the base dir of the project 
 PROJECT_DIR=$(dirname $(readlink -f "$0"))
-
-# modify paths to data accordingly for your deployment
-GLOBAL_DATA_DIR=$PROJECT_DIR/global_data
-USER_DATA_DIR=$PROJECT_DIR/user_data
-USER_NOTEBOOKS_DIR=$PROJECT_DIR/user_notebooks
 
 # create temporary container to mount our shareable volumes
 echo "Creating temporary container 'data-setup' to mount our project's docker volumes and populate them with our data..." 

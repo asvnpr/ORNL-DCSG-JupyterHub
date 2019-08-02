@@ -143,7 +143,7 @@ c.Spawner.env_keep = ['JUPYTER_ENABLE_LAB']
 # Explicitly set notebook directory because we'll be mounting a host volume to
 # it.  Most jupyter/docker-stacks *-notebook images run the Notebook server as
 # user `jovyan`, and set the notebook directory to `/home/jovyan/work`.
-notebook_dir= os.environ.get('DOCKER_NOTEBOOK_DIR') or '/home/jovyan/work'
+notebook_dir= os.environ.get('DOCKER_NOTEBOOK_DIR') or '/home/jovyan/'
 c.DockerSpawner.notebook_dir= notebook_dir
 # Mount the real user's Docker volume on the host to the notebook user's
 # notebook directory in the container
